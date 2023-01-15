@@ -1,33 +1,8 @@
 const express = require('express');
 const router = express.Router();
 const catchAsync = require('../utils/catchAsync');
-const ExpressError = require('../utils/ExpressError');
-const { campgroundSchema } = require('../schemas.js');
 const Campground = require('../models/campground');
-const { isLoggedIn } = require('../middleware');
-
-
-
-// creating middleware for validating campground schema
-const validateCampground = (req, res, next) => {
-    const { error } = campgroundSchema.validate(req.body);
-    if (error) {
-        const msg = error.details.map(el => el.message).join(',');
-        throw new ExpressError(msg, 400);
-    } else {
-        next();
-    }
-}
-
-const isAuthor = async (req, res, next) => {
-    const {id} = req.params;
-    const campground = await Campground.findById(id);
-    if(!campground.author.equals(req.user._id)){
-        req.flash('error', 'You Dont have permission');
-        return res.redirect(`/campgrounds/${id}`);
-    }
-    next()
-}
+const { isLoggedIn, validateCampground, isAuthor } = require('../middleware');
 
 router.get('/', catchAsync(async (req, res) => {
     const campgrounds = await Campground.find();
@@ -47,8 +22,12 @@ router.post('/', isLoggedIn, validateCampground, catchAsync(async (req, res, nex
 }))
 
 router.get('/:id', catchAsync(async (req, res) => {
-    const campground = await Campground.findById(req.params.id).populate('reviews').populate('author');
-    console.log(campground)
+    const campground = await Campground.findById(req.params.id).populate({
+        path:'reviews',
+        populate: {
+            path: 'author',
+        }
+    }).populate('author');
     if (!campground) {
         req.flash('error', 'Campground not available!');
         return res.redirect('/campgrounds');
@@ -78,6 +57,5 @@ router.delete('/:id', isAuthor, catchAsync(async (req, res) => {
     req.flash('success', 'Campground Successfully deleted!')
     res.redirect('/campgrounds');
 }))
-
 
 module.exports = router;
